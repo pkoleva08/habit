@@ -1,0 +1,15 @@
+{
+  "name": "habitly",
+  "private": true,
+  "version": "1.0.0",
+  "scripts": {
+    "predev": "node scripts/ensure-free-port.js",
+    "dev": "concurrently --kill-others-on-fail --names server,client --prefix-colors blue,green \"npm run dev --prefix server\" \"wait-on tcp:4000 && npm run dev --prefix client\"",
+    "prestart": "node scripts/ensure-free-port.js",
+    "start": "concurrently --kill-others-on-fail --names server,client --prefix-colors blue,green \"npm run start --prefix server\" \"wait-on tcp:4000 && npm run dev --prefix client\""
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1",
+    "wait-on": "^8.0.0"
+  }
+}
