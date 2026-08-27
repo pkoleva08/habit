@@ -1,13 +1,14 @@
 import { useEffect, useState } from 'react'
-import { createGroup, getGroups, getLeaderboard, joinGroup } from '../services/habitService'
+import { createGroup, getGroups, getLeaderboard, joinGroup, leaveGroup } from '../services/habitService'
 
 export default function Groups() {
 	const [groups, setGroups] = useState([])
 	const [leaderboard, setLeaderboard] = useState([])
 	const [form, setForm] = useState({ name: '', description: '' })
-	const [joinId, setJoinId] = useState('')
+	const [joinCode, setJoinCode] = useState('')
 	const [notice, setNotice] = useState('')
 	const [error, setError] = useState('')
+	const [openMenuId, setOpenMenuId] = useState(null)
 
 	const loadGroups = async () => {
 		const data = await getGroups()
@@ -26,9 +27,9 @@ export default function Groups() {
 		event.preventDefault()
 		setError('')
 		try {
-			await createGroup(form)
+			const data = await createGroup(form)
 			setForm({ name: '', description: '' })
-			setNotice('Group created')
+			setNotice(data.group?.invite_code ? `Group created. Invite code: ${data.group.invite_code}` : 'Group created')
 			await loadGroups()
 		} catch (e) {
 			setError(e.message)
@@ -39,8 +40,8 @@ export default function Groups() {
 		event.preventDefault()
 		setError('')
 		try {
-			await joinGroup(Number(joinId))
-			setJoinId('')
+			await joinGroup(joinCode.trim())
+			setJoinCode('')
 			setNotice('Joined group')
 			await loadGroups()
 		} catch (e) {
@@ -52,6 +53,18 @@ export default function Groups() {
 		try {
 			const data = await getLeaderboard(groupId)
 			setLeaderboard(data.leaderboard || [])
+		} catch (e) {
+			setError(e.message)
+		}
+	}
+
+	const onLeaveGroup = async (groupId, action = 'transfer') => {
+		setError('')
+		setOpenMenuId(null)
+		try {
+			const data = await leaveGroup(groupId, action)
+			setNotice(data.message || 'You left the group')
+			await loadGroups()
 		} catch (e) {
 			setError(e.message)
 		}
@@ -83,10 +96,19 @@ export default function Groups() {
 				<h3>Join group</h3>
 				<form className="inline-form" onSubmit={onJoin}>
 					<input
-						type="number"
-						placeholder="Group id"
-						value={joinId}
-						onChange={(event) => setJoinId(event.target.value)}
+						type="text"
+						inputMode="numeric"
+						pattern="[0-9]*"
+						placeholder="6-digit invite code"
+						value={joinCode}
+						onKeyDown={(event) => {
+							const allowed = ['Backspace', 'Delete', 'Tab', 'ArrowLeft', 'ArrowRight', 'Home', 'End']
+							if (/[0-9]/.test(event.key) || allowed.includes(event.key)) {
+								return
+							}
+							event.preventDefault()
+						}}
+						onChange={(event) => setJoinCode(event.target.value.replace(/\D/g, '').slice(0, 6))}
 						required
 					/>
 					<button type="submit">Join</button>
@@ -97,14 +119,48 @@ export default function Groups() {
 				<h3>Your groups</h3>
 				<div className="list">
 					{groups.map((group) => (
-						<div key={group.id} className="row-between">
-							<div>
+						<div key={group.id} className="group-item">
+							<div className="group-meta">
 								<strong>{group.name}</strong>
 								<p className="muted">Members: {group.member_count}</p>
+								<p className="muted">Your role: {group.member_role === 'admin' ? 'Admin' : 'Member'}</p>
+								{group.member_role === 'admin' && group.admin_invite_code ? (
+									<p className="muted">Invite code: {group.admin_invite_code}</p>
+								) : null}
 							</div>
-							<button type="button" onClick={() => onViewBoard(group.id)}>
-								View leaderboard
-							</button>
+							<div className="group-actions">
+								<button type="button" onClick={() => onViewBoard(group.id)}>
+									View leaderboard
+								</button>
+								<div className="menu-wrapper">
+									<button
+										type="button"
+										className="icon-button"
+										onClick={() => setOpenMenuId(openMenuId === group.id ? null : group.id)}
+										aria-label="Open group menu"
+									>
+										⋮
+									</button>
+									{openMenuId === group.id ? (
+										<div className="group-menu">
+											{group.member_role === 'admin' ? (
+												<>
+													<button type="button" onClick={() => onLeaveGroup(group.id, 'transfer')}>
+														Leave & transfer admin
+													</button>
+													<button type="button" onClick={() => onLeaveGroup(group.id, 'delete')}>
+														Delete group
+													</button>
+												</>
+											) : (
+												<button type="button" onClick={() => onLeaveGroup(group.id, 'transfer')}>
+													Leave group
+												</button>
+											)}
+										</div>
+									) : null}
+								</div>
+							</div>
 						</div>
 					))}
 				</div>

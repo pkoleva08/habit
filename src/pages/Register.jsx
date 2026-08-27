@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import PasswordInput from '../components/PasswordInput'
 import { useAuth } from '../hooks/useAuth'
 
 export default function Register() {
@@ -28,6 +29,7 @@ export default function Register() {
 			<form className="auth-card" onSubmit={onSubmit}>
 				<h2>Create account</h2>
 				<input
+					autoComplete="name"
 					type="text"
 					placeholder="Name"
 					value={form.name}
@@ -35,17 +37,18 @@ export default function Register() {
 					required
 				/>
 				<input
+					autoComplete="email"
 					type="email"
 					placeholder="Email"
 					value={form.email}
 					onChange={(event) => setForm((prev) => ({ ...prev, email: event.target.value }))}
 					required
 				/>
-				<input
-					type="password"
-					placeholder="Password"
+				<PasswordInput
 					value={form.password}
 					onChange={(event) => setForm((prev) => ({ ...prev, password: event.target.value }))}
+					placeholder="Password"
+					autoComplete="new-password"
 					required
 				/>
 				{error ? <p className="error">{error}</p> : null}

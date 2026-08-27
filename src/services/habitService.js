@@ -11,6 +11,25 @@ export function createHabit(payload) {
 	})
 }
 
+export function updateHabit(habitId, payload) {
+	return apiRequest(`/habits/${habitId}`, {
+		method: 'PATCH',
+		body: JSON.stringify(payload),
+	})
+}
+
+export function deleteHabit(habitId) {
+	return apiRequest(`/habits/${habitId}`, {
+		method: 'DELETE',
+	})
+}
+
+export function deleteAllHabits() {
+	return apiRequest('/habits', {
+		method: 'DELETE',
+	})
+}
+
 export function completeHabit(habitId) {
 	return apiRequest(`/habits/${habitId}/complete`, {
 		method: 'POST',
@@ -30,6 +49,12 @@ export function getNotifications(limit = 20) {
 	return apiRequest(`/habits/notifications?limit=${limit}`)
 }
 
+export function clearUserNotifications() {
+	return apiRequest('/habits/notifications', {
+		method: 'DELETE',
+	})
+}
+
 export function getGroups() {
 	return apiRequest('/groups')
 }
@@ -41,10 +66,17 @@ export function createGroup(payload) {
 	})
 }
 
-export function joinGroup(groupId) {
-	return apiRequest(`/groups/${groupId}/join`, {
+export function joinGroup(code) {
+	return apiRequest('/groups/join', {
 		method: 'POST',
-		body: JSON.stringify({}),
+		body: JSON.stringify({ code }),
+	})
+}
+
+export function leaveGroup(groupId, action = 'transfer') {
+	return apiRequest(`/groups/${groupId}/leave`, {
+		method: 'POST',
+		body: JSON.stringify({ action }),
 	})
 }
 
@@ -54,4 +86,10 @@ export function getLeaderboard(groupId) {
 
 export function getAnalyticsOverview() {
 	return apiRequest('/analytics/overview')
+}
+
+export function clearRecommendations() {
+	return apiRequest('/analytics/recommendations', {
+		method: 'DELETE',
+	})
 }

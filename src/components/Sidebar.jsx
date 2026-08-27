@@ -8,7 +8,7 @@ const LINKS = [
 	{ to: '/profile', label: 'Profile' },
 ]
 
-export default function Sibedar() {
+export default function Sidebar() {
 	return (
 		<aside className="sidebar">
 			<div className="brand">Habitly</div>

@@ -1,6 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
 import Notification from '../components/Notification'
-import { getAnalyticsOverview, getHabits, getNotifications, getReminders } from '../services/habitService'
+import {
+	clearRecommendations,
+	clearUserNotifications,
+	getAnalyticsOverview,
+	getHabits,
+	getNotifications,
+	getReminders,
+} from '../services/habitService'
 
 export default function Dashboard() {
 	const [habits, setHabits] = useState([])
@@ -30,8 +37,26 @@ export default function Dashboard() {
 		load()
 	}, [])
 
+	const handleClearRecommendations = async () => {
+		try {
+			await clearRecommendations()
+			setOverview((prev) => ({ ...prev, recommendations: [] }))
+		} catch (e) {
+			setError(e.message)
+		}
+	}
+
+	const clearNotifications = async () => {
+		try {
+			await clearUserNotifications()
+			setNotifications([])
+		} catch (e) {
+			setError(e.message)
+		}
+	}
+
 	const bestStreak = useMemo(
-		() => habits.reduce((acc, habit) => Math.max(acc, Number(habit.streak || 0)), 0),
+		() => habits.reduce((acc, habit) => Math.max(acc, Number(habit.best_streak || habit.streak || 0)), 0),
 		[habits],
 	)
 
@@ -63,9 +88,17 @@ export default function Dashboard() {
 				</div>
 			</article>
 
-			<Notification title="Recommendations" items={overview.recommendations || []} />
+			<Notification
+				title="Recommendations"
+				items={overview.recommendations || []}
+				onClear={handleClearRecommendations}
+			/>
 			<Notification title="Reminder queue" items={reminders} />
-			<Notification title="Your notifications" items={notifications} />
+			<Notification
+				title="Your notifications"
+				items={notifications}
+				onClear={clearNotifications}
+			/>
 
 			{error ? <p className="error">{error}</p> : null}
 		</section>

@@ -1,5 +1,6 @@
 import { createContext, useCallback, useEffect, useMemo, useState } from 'react'
 import { getMe, loginUser, registerUser } from '../services/authService'
+import { startBrowserNotifications, stopBrowserNotifications } from '../services/browserNotifications'
 
 export const AuthContext = createContext(null)
 
@@ -14,12 +15,14 @@ export function AuthProvider({ children }) {
 		localStorage.setItem(TOKEN_KEY, payload.token)
 		setUser(payload.user)
 		setBadges(payload.badges || [])
+		startBrowserNotifications({ prompt: true })
 	}, [])
 
 	const logout = useCallback(() => {
 		localStorage.removeItem(TOKEN_KEY)
 		setUser(null)
 		setBadges([])
+		stopBrowserNotifications()
 	}, [])
 
 	const refreshMe = useCallback(async () => {
@@ -33,6 +36,7 @@ export function AuthProvider({ children }) {
 			const data = await getMe()
 			setUser(data.user)
 			setBadges(data.badges || [])
+			startBrowserNotifications({ prompt: false })
 		} catch {
 			logout()
 		} finally {

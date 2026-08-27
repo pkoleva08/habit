@@ -1,7 +1,14 @@
-export default function Notification({ title, items }) {
+export default function Notification({ title, items, onClear, clearLabel = 'Clear all' }) {
 	return (
 		<section className="card">
-			<h3>{title}</h3>
+			<div className="notification-header">
+				<h3>{title}</h3>
+				{onClear ? (
+					<button type="button" className="clear-all-button" onClick={onClear}>
+						{clearLabel}
+					</button>
+				) : null}
+			</div>
 			{items?.length ? (
 				<ul className="plain-list">
 					{items.map((item, index) => (

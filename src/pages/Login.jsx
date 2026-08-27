@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import PasswordInput from '../components/PasswordInput'
 import { useAuth } from '../hooks/useAuth'
 
 export default function Login() {
@@ -28,17 +29,18 @@ export default function Login() {
 			<form className="auth-card" onSubmit={onSubmit}>
 				<h2>Login</h2>
 				<input
+					autoComplete="email"
 					type="email"
 					placeholder="Email"
 					value={form.email}
 					onChange={(event) => setForm((prev) => ({ ...prev, email: event.target.value }))}
 					required
 				/>
-				<input
-					type="password"
-					placeholder="Password"
+				<PasswordInput
 					value={form.password}
 					onChange={(event) => setForm((prev) => ({ ...prev, password: event.target.value }))}
+					placeholder="Password"
+					autoComplete="current-password"
 					required
 				/>
 				{error ? <p className="error">{error}</p> : null}

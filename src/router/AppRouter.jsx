@@ -1,6 +1,6 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import Navbar from '../components/Navbar'
-import Sibedar from '../components/Sibedar'
+import Sidebar from '../components/Sidebar'
 import { useAuth } from '../hooks/useAuth'
 import Analytics from '../pages/Analytics'
 import Dashboard from '../pages/Dashboard'
@@ -27,7 +27,7 @@ function ProtectedRoute({ children }) {
 function DashboardLayout() {
 	return (
 		<div className="app-shell">
-			<Sibedar />
+			<Sidebar />
 			<div className="app-content">
 				<Navbar />
 				<main className="page-content">

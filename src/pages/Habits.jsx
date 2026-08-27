@@ -1,7 +1,15 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Calendar from '../components/Calendar'
 import HabitCard from '../components/HabitCard'
-import { completeHabit, createHabit, getHabitCalendar, getHabits } from '../services/habitService'
+import {
+	completeHabit,
+	createHabit,
+	deleteAllHabits,
+	deleteHabit,
+	getHabitCalendar,
+	getHabits,
+	updateHabit,
+} from '../services/habitService'
 
 export default function Habits() {
 	const [habits, setHabits] = useState([])
@@ -10,10 +18,18 @@ export default function Habits() {
 	const [calendarDates, setCalendarDates] = useState([])
 	const [notice, setNotice] = useState('')
 	const [error, setError] = useState('')
+	const [menuOpen, setMenuOpen] = useState(false)
+	const [editingHabitId, setEditingHabitId] = useState(null)
+	const [menuOpenHabitId, setMenuOpenHabitId] = useState(null)
+	const [editValue, setEditValue] = useState({ name: '', reminderTime: '' })
+	const [calendarView, setCalendarView] = useState(() => {
+		const now = new Date()
+		return { year: now.getFullYear(), month: now.getMonth() + 1 }
+	})
 
 	const now = new Date()
-	const year = now.getFullYear()
-	const month = now.getMonth() + 1
+	const year = calendarView.year
+	const month = calendarView.month
 
 	const loadHabits = async () => {
 		const data = await getHabits()
@@ -23,6 +39,20 @@ export default function Habits() {
 	useEffect(() => {
 		loadHabits().catch((e) => setError(e.message))
 	}, [])
+
+	useEffect(() => {
+		if (!habits.length) return
+		if (!selectedHabitId) {
+			const firstHabit = habits[0]
+			setSelectedHabitId(firstHabit.id)
+			openCalendar(firstHabit.id, calendarView.year, calendarView.month)
+			return
+		}
+		const activeHabit = habits.find((habit) => habit.id === selectedHabitId)
+		if (activeHabit) {
+			openCalendar(activeHabit.id, calendarView.year, calendarView.month)
+		}
+	}, [habits, selectedHabitId, calendarView.year, calendarView.month])
 
 	const submitHabit = async (event) => {
 		event.preventDefault()
@@ -52,15 +82,149 @@ export default function Habits() {
 		}
 	}
 
-	const openCalendar = async (habitId) => {
+	const openCalendar = async (habitId, customYear = year, customMonth = month) => {
 		setSelectedHabitId(habitId)
 		try {
-			const data = await getHabitCalendar(habitId, year, month)
+			const data = await getHabitCalendar(habitId, customYear, customMonth)
 			setCalendarDates(data.dates || [])
 		} catch (e) {
 			setError(e.message)
 		}
 	}
+
+	const changeCalendarMonth = (offset) => {
+		const currentDate = new Date(calendarView.year, calendarView.month - 1, 1)
+		const minDate = new Date(2020, 0, 1)
+		const maxDate = new Date(now.getFullYear(), now.getMonth(), 1)
+		currentDate.setMonth(currentDate.getMonth() + offset)
+
+		let nextYear = currentDate.getFullYear()
+		let nextMonth = currentDate.getMonth() + 1
+
+		if (currentDate < minDate) {
+			const earliestDate = new Date(minDate)
+			nextYear = earliestDate.getFullYear()
+			nextMonth = earliestDate.getMonth() + 1
+		}
+
+		if (currentDate > maxDate) {
+			const latestDate = new Date(maxDate)
+			nextYear = latestDate.getFullYear()
+			nextMonth = latestDate.getMonth() + 1
+		}
+
+		setCalendarView({ year: nextYear, month: nextMonth })
+
+		if (selectedHabitId) {
+			openCalendar(selectedHabitId, nextYear, nextMonth)
+		}
+	}
+
+	const handleDeleteHabit = async (habitId) => {
+		setError('')
+		try {
+			await deleteHabit(habitId)
+			setNotice('Habit deleted successfully')
+			await loadHabits()
+			if (selectedHabitId === habitId) {
+				setSelectedHabitId(null)
+				setCalendarDates([])
+			}
+		} catch (e) {
+			setError(e.message)
+		}
+	}
+
+	const handleDeleteAllHabits = async () => {
+		setError('')
+		if (!habits.length) {
+			setNotice('There are no habits to delete')
+			return
+		}
+
+		const confirmed = window.confirm('Are you sure you want to delete all habits?')
+		if (!confirmed) return
+
+		try {
+			await deleteAllHabits()
+			setMenuOpen(false)
+			setSelectedHabitId(null)
+			setCalendarDates([])
+			setNotice('All habits deleted successfully')
+			await loadHabits()
+		} catch (e) {
+			setError(e.message)
+		}
+	}
+
+	const startEdit = (habit) => {
+		setEditingHabitId(habit.id)
+		setEditValue({
+			name: habit.name,
+			reminderTime: habit.reminder_time || '',
+		})
+		setMenuOpen(false)
+		setMenuOpenHabitId(null)
+	}
+
+	const handleEditChange = (field, value) => {
+		setEditValue((prev) => ({ ...prev, [field]: value }))
+	}
+
+	const saveEdit = async () => {
+		if (!editingHabitId) return
+		const currentHabit = habits.find((habit) => habit.id === editingHabitId)
+		const payload = {
+			name: (editValue.name || currentHabit?.name || '').trim(),
+			frequency: currentHabit?.frequency || 'daily',
+			reminderTime: editValue.reminderTime,
+		}
+
+		if (!payload.name) {
+			setError('Habit name is required')
+			return
+		}
+
+		setError('')
+		try {
+			const response = await updateHabit(editingHabitId, payload)
+			const updatedHabit = response?.habit || {
+				...currentHabit,
+				...payload,
+				reminder_time: payload.reminderTime || currentHabit?.reminder_time || null,
+			}
+
+			setHabits((prev) =>
+				prev.map((habit) =>
+					habit.id === editingHabitId
+						? {
+								...habit,
+								name: updatedHabit.name,
+								frequency: updatedHabit.frequency,
+								reminder_time: updatedHabit.reminder_time ?? habit.reminder_time,
+						  }
+						: habit,
+				),
+			)
+
+			setEditingHabitId(null)
+			setEditValue({ name: '', reminderTime: '' })
+			setMenuOpenHabitId(null)
+			setNotice('Habit updated successfully')
+			await loadHabits()
+		} catch (e) {
+			if (e.message?.includes('Invalid or expired token') || e.message?.includes('Missing auth token')) {
+				setError('Your session has expired. Please log in again.')
+				return
+			}
+			setError(e.message)
+		}
+	}
+
+	const sectionActions = useMemo(
+		() => [{ label: 'Delete all habits', action: handleDeleteAllHabits, danger: true }],
+		[handleDeleteAllHabits],
+	)
 
 	return (
 		<section className="grid two-col">
@@ -93,21 +257,79 @@ export default function Habits() {
 			<article className="card">
 				<h3>Habit calendar</h3>
 				{selectedHabitId ? (
-					<Calendar year={year} month={month} dates={calendarDates} />
+					<Calendar
+						year={year}
+						month={month}
+						dates={calendarDates}
+						onPrevMonth={() => changeCalendarMonth(-1)}
+						onNextMonth={() => changeCalendarMonth(1)}
+					/>
 				) : (
 					<p className="muted">Select a habit to view this month calendar.</p>
 				)}
 			</article>
 
 			<article className="card full-width">
-				<h3>Your habits</h3>
+				<div className="section-header-row">
+					<h3>Your habits</h3>
+					<div className="section-menu-wrap">
+						<button
+							type="button"
+							className="menu-dots-button"
+							onClick={() => setMenuOpen((prev) => !prev)}
+							aria-label="Habit actions"
+						>
+							⋯
+						</button>
+						{menuOpen ? (
+							<div className="section-menu-dropdown">
+								{sectionActions.map((item) => (
+									<button
+										type="button"
+										key={item.label}
+										className={item.danger ? 'danger-text' : ''}
+										onClick={() => {
+											item.action()
+											setMenuOpen(false)
+										}}
+									>
+										{item.label}
+									</button>
+								))}
+							</div>
+						) : null}
+					</div>
+				</div>
+
 				<div className="list">
 					{habits.map((habit) => (
 						<div key={habit.id}>
-							<HabitCard habit={habit} onComplete={onComplete} />
-							<button className="text-button" type="button" onClick={() => openCalendar(habit.id)}>
-								View calendar
-							</button>
+							<HabitCard
+								habit={habit}
+								onComplete={onComplete}
+								onDelete={() => {
+									setMenuOpenHabitId(null)
+									handleDeleteHabit(habit.id)
+								}}
+								onEdit={() => startEdit(habit)}
+								editing={editingHabitId === habit.id}
+								editValue={editValue}
+								onEditChange={handleEditChange}
+								onSaveEdit={saveEdit}
+								onCancelEdit={() => {
+									setEditingHabitId(null)
+									setEditValue({ name: '', reminderTime: '' })
+								}}
+								menuOpen={menuOpenHabitId === habit.id}
+								onToggleMenu={() => {
+									setMenuOpenHabitId((current) => (current === habit.id ? null : habit.id))
+								}}
+							/>
+							{selectedHabitId === habit.id ? null : (
+								<button className="text-button" type="button" onClick={() => openCalendar(habit.id, calendarView.year, calendarView.month)}>
+									View calendar
+								</button>
+							)}
 						</div>
 					))}
 				</div>
