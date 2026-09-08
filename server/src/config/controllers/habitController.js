@@ -25,6 +25,10 @@ function getDateKey(date) {
 	return `${year}-${month}-${day}`
 }
 
+function isSameLocalDay(dateA, dateB) {
+	return getDateKey(dateA) === getDateKey(dateB)
+}
+
 function isSameWeek(dateA, dateB) {
 	const a = new Date(dateA)
 	const b = new Date(dateB)
@@ -95,20 +99,16 @@ export async function listHabits(req, res) {
 					])
 				}
 
-				const { rowCount } = await db.query(
-					`SELECT id
-					 FROM habit_completions
-					 WHERE habit_id = $1
-					 AND completed_at >= $2
-					 AND completed_at < $3`,
-					[habit.id, todayStart.toISOString(), tomorrow.toISOString()],
-				)
+				const completedToday = completionRows.some((row) => {
+					const completionDate = new Date(row.completed_at)
+					return completionDate >= todayStart && completionDate < tomorrow
+				})
 
 				return {
 					...habit,
 					streak: metrics.current,
 					best_streak: nextBest,
-					completed_today: rowCount > 0,
+					completed_today: completedToday,
 				}
 			}),
 		)
@@ -292,7 +292,7 @@ export async function completeHabit(req, res) {
 			const existingDate = new Date(entry.completed_at)
 			return habit.frequency === 'weekly'
 				? isSameWeek(existingDate, completionMoment)
-				: getDateKey(existingDate) === getDateKey(completionMoment)
+				: isSameLocalDay(existingDate, completionMoment)
 		})
 
 		if (duplicateExists) {
