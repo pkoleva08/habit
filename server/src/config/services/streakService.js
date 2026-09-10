@@ -1,7 +1,16 @@
 const ONE_DAY_MS = 24 * 60 * 60 * 1000
 
+function parseLocalDate(value) {
+	if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value.trim())) {
+		const [year, month, day] = value.split('-').map(Number)
+		return new Date(year, month - 1, day)
+	}
+
+	return new Date(value)
+}
+
 function toLocalDateKey(value) {
-	const date = new Date(value)
+	const date = parseLocalDate(value)
 	const year = date.getFullYear()
 	const month = String(date.getMonth() + 1).padStart(2, '0')
 	const day = String(date.getDate()).padStart(2, '0')
@@ -9,7 +18,7 @@ function toLocalDateKey(value) {
 }
 
 function normalizeDate(value) {
-	const date = new Date(value)
+	const date = parseLocalDate(value)
 	date.setHours(0, 0, 0, 0)
 	return date
 }
@@ -81,8 +90,8 @@ export function calculateStreakMetrics(dates, frequency = 'daily', referenceDate
 		const currentKey = sortedDays[index]
 		const previousKey = sortedDays[index - 1]
 		if (previousKey) {
-			const currentDate = new Date(`${currentKey}T00:00:00Z`)
-			const previousDate = new Date(`${previousKey}T00:00:00Z`)
+			const currentDate = parseLocalDate(currentKey)
+			const previousDate = parseLocalDate(previousKey)
 			const diffDays = (currentDate.getTime() - previousDate.getTime()) / ONE_DAY_MS
 			if (diffDays === 1) {
 				run += 1

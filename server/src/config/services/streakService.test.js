@@ -59,3 +59,13 @@ test('best streak keeps growing when current streak improves', () => {
 	assert.equal(result.current, 8)
 	assert.equal(result.best, 8)
 })
+
+test('date-only values stay on the correct local day for streaks and calendar state', () => {
+	const today = new Date(2026, 8, 10, 12, 0, 0)
+	const dates = ['2026-09-09', '2026-09-10']
+
+	const result = calculateStreakMetrics(dates, 'daily', today)
+
+	assert.equal(result.current, 2)
+	assert.equal(result.best, 2)
+})

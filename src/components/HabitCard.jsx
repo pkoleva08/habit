@@ -10,8 +10,10 @@ export default function HabitCard({
 	onCancelEdit,
 	menuOpen,
 	onToggleMenu,
+	pendingCompletion = false,
 }) {
-	const completedToday = Boolean(habit.completed_today)
+	const completedToday = Boolean(habit.completed_today) || pendingCompletion
+	const completedToday = Boolean(habit.completed_today) || pendingCompletion
 
 	return (
 		<article className="card habit-card">
@@ -54,9 +56,8 @@ export default function HabitCard({
 				</div>
 			</div>
 
-			<div className="habit-meta">
-				<div className="pill">Streak: {habit.streak || 0}</div>
-				<div className="pill">Best: {habit.best_streak || habit.streak || 0}</div>
+			<div className="habit-meta">Number(habit.streak || 0)}</div>
+				<div className="pill">Best: {Number(habit.best_streak || habit.streak || 0)}</div>
 				<div className="pill">Reminder: {habit.reminder_time || 'not set'}</div>
 				{completedToday ? <div className="pill success">Completed today</div> : null}
 			</div>
@@ -74,9 +75,12 @@ export default function HabitCard({
 				<div className="habit-actions-row">
 					<button
 						type="button"
+						className={`habit-complete-button${completedToday ? ' completed' : ''}`}
 						onClick={() => onComplete(habit.id)}
 						disabled={completedToday}
-						style={{ opacity: completedToday ? 0.7 : 1, cursor: completedToday ? 'not-allowed' : 'pointer' }}
+						aria-pressed={completedToday
+						disabled={completedToday}
+						aria-pressed={completedToday}
 					>
 						{completedToday ? 'Completed' : 'Mark Completed'}
 					</button>

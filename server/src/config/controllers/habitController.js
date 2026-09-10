@@ -17,17 +17,39 @@ import {
 	setNotificationPreference,
 } from '../services/notificationService.js'
 
+function toLocalDateValue(dateLike) {
+	if (!dateLike) return null
+	const value = String(dateLike).trim()
+	if (!value) return null
+
+	const parsed = new Date(value.includes('T') || value.includes('Z') ? value : value.replace(' ', 'T'))
+	return Number.isNaN(parsed.getTime()) ? new Date(value) : parsed
+}
+
 function getDateKey(date) {
-	const value = new Date(date)
+	const value = toLocalDateValue(date)
+	if (!value || Number.isNaN(value.getTime())) {
+		return null
+	}
+
 	const year = value.getFullYear()
 	const month = String(value.getMonth() + 1).padStart(2, '0')
 	const day = String(value.getDate()).padStart(2, '0')
 	return `${year}-${month}-${day}`
 }
 
+function isSameLocalDay(dateA, dateB) {
+	const aKey = getDateKey(dateA)
+	const bKey = getDateKey(dateB)
+	return aKey && bKey && aKey === bKey
+}
+
 function isSameWeek(dateA, dateB) {
-	const a = new Date(dateA)
-	const b = new Date(dateB)
+	const a = toLocalDateValue(dateA)
+	const b = toLocalDateValue(dateB)
+	if (!a || !b || Number.isNaN(a.getTime()) || Number.isNaN(b.getTime())) {
+		return false
+	}
 
 	const getWeekStart = (value) => {
 		const result = new Date(value)
@@ -95,20 +117,13 @@ export async function listHabits(req, res) {
 					])
 				}
 
-				const { rowCount } = await db.query(
-					`SELECT id
-					 FROM habit_completions
-					 WHERE habit_id = $1
-					 AND completed_at >= $2
-					 AND completed_at < $3`,
-					[habit.id, todayStart.toISOString(), tomorrow.toISOString()],
-				)
+				const completedToday = completionRows.some((row) => isSameLocalDay(row.completed_at, new Date()))
 
 				return {
 					...habit,
 					streak: metrics.current,
 					best_streak: nextBest,
-					completed_today: rowCount > 0,
+					completed_today: completedToday,
 				}
 			}),
 		)
@@ -292,13 +307,15 @@ export async function completeHabit(req, res) {
 			const existingDate = new Date(entry.completed_at)
 			return habit.frequency === 'weekly'
 				? isSameWeek(existingDate, completionMoment)
-				: getDateKey(existingDate) === getDateKey(completionMoment)
+				: isSameLocalDay(existingDate, completionMoment)
 		})
 
 		if (duplicateExists) {
 			return res.status(200).json({
 				message: 'Completion already recorded for the current period',
-				streak: habit.streak,
+				streak: Number(habit.streak || 0),
+				bestStreak: Number(habit.best_streak || 0),
+				completed_today: true,
 				notifications: [],
 			})
 		}
@@ -316,6 +333,7 @@ export async function completeHabit(req, res) {
 			message: 'Habit marked as completed',
 			streak,
 			bestStreak,
+			completed_today: true,
 			notifications: badgeNotifications,
 		})
 	} catch (error) {
@@ -348,16 +366,20 @@ export async function getHabitCalendar(req, res) {
 
 		const monthDates = rows
 			.filter((row) => {
-				const value = new Date(row.completed_at)
-				return value.getFullYear() === year && value.getMonth() + 1 === month
+				const value = toLocalDateValue(row.completed_at)
+				return value && value.getFullYear() === year && value.getMonth() + 1 === month
 			})
 			.map((row) => {
-				const value = new Date(row.completed_at)
+				const value = toLocalDateValue(row.completed_at)
+				if (!value || Number.isNaN(value.getTime())) {
+					return null
+				}
 				const y = value.getFullYear()
 				const m = String(value.getMonth() + 1).padStart(2, '0')
 				const d = String(value.getDate()).padStart(2, '0')
 				return `${y}-${m}-${d}`
 			})
+			.filter(Boolean)
 
 		return res.json({ dates: monthDates })
 	} catch (error) {

@@ -13,8 +13,8 @@ export async function getHabitsByUser(userId) {
 
 export async function createHabit({ userId, name, frequency, reminderTime }) {
 	const { rows } = await db.query(
-		`INSERT INTO habits (user_id, name, frequency, reminder_time)
-		 VALUES ($1, $2, $3, $4)
+		`INSERT INTO habits (user_id, name, frequency, reminder_time, streak, best_streak)
+		 VALUES ($1, $2, $3, $4, 0, 0)
 		 RETURNING id, user_id, name, frequency, reminder_time, streak, best_streak, created_at`,
 		[userId, name, frequency, reminderTime || null],
 	)

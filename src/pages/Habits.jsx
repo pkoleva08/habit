@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import Calendar from '../components/Calendar'
 import HabitCard from '../components/HabitCard'
 import {
@@ -11,6 +11,13 @@ import {
 	updateHabit,
 } from '../services/habitService'
 
+function getTodayKey(date = new Date()) {
+	const year = date.getFullYear()
+	const month = String(date.getMonth() + 1).padStart(2, '0')
+	const day = String(date.getDate()).padStart(2, '0')
+	return `${year}-${month}-${day}`
+}
+
 export default function Habits() {
 	const [habits, setHabits] = useState([])
 	const [form, setForm] = useState({ name: '', frequency: 'daily', reminderTime: '' })
@@ -19,9 +26,12 @@ export default function Habits() {
 	const [notice, setNotice] = useState('')
 	const [error, setError] = useState('')
 	const [menuOpen, setMenuOpen] = useState(false)
+	const [completedTodayByHabit, setCompletedTodayByHabit] = useState({})
+	const [pendingCompletionIds, setPendingCompletionIds] = useState([])
 	const [editingHabitId, setEditingHabitId] = useState(null)
 	const [menuOpenHabitId, setMenuOpenHabitId] = useState(null)
 	const [editValue, setEditValue] = useState({ name: '', reminderTime: '' })
+	const inFlightCompletionRef = useRef(new Set())
 	const [calendarView, setCalendarView] = useState(() => {
 		const now = new Date()
 		return { year: now.getFullYear(), month: now.getMonth() + 1 }
@@ -33,7 +43,29 @@ export default function Habits() {
 
 	const loadHabits = async () => {
 		const data = await getHabits()
-		setHabits(data.habits || [])
+		const nextHabits = (data.habits || []).map((habit) => ({
+			...habit,
+			streak: Number(habit.streak || 0),
+			best_streak: Number(habit.best_streak || 0),
+			completed_today: Boolean(habit.completed_today),
+		}))
+		setHabits(nextHabits
+		return { year: now.getFullYear(), month: now.getMonth() + 1 }
+	})
+
+	const now = new Date()
+	const year = calendarView.year
+	const month = calendarView.month
+
+	const loadHabits = async () => {
+		const data = await getHabits()
+		const nextHabits = (data.habits || []).map((habit) => ({
+			...habit,
+			streak: Number(habit.streak || 0),
+			best_streak: Number(habit.best_streak || 0),
+			completed_today: Boolean(habit.completed_today),
+		}))
+		setHabits(nextHabits)
 	}
 
 	useEffect(() => {
@@ -53,32 +85,168 @@ export default function Habits() {
 			openCalendar(activeHabit.id, calendarView.year, calendarView.month)
 		}
 	}, [habits, selectedHabitId, calendarView.year, calendarView.month])
+const habit = habits.find((item) => item.id === habitId)
+		if (!habit || habit.completed_today || inFlightCompletionRef.current.has(habitId)) {
+			return
+		}
 
-	const submitHabit = async (event) => {
-		event.preventDefault()
-		setError('')
+		const todayKey = getTodayKey()
+		const previousStreak = Number(habit?.streak || 0)
+		const nextStreak = Math.max(previousStreak + 1, 1)
+		const nextBest = Math.max(Number(habit?.best_streak || habit?.streak || 0), nextStreak)
+
+		inFlightCompletionRef.current.add(habitId)
+		setPendingCompletionIds((prev) => [...new Set([...prev, habitId])])
+		setCompletedTodayByHabit((prev) => ({
+			...prev,
+			[habitId]: { dayKey: todayKey },
+		}))
+		setHabits((prev) =>
+			prev.map((item) =>
+				item.id === habitId
+					? {
+							...item,
+							streak: nextStreak,
+							best_streak: nextBest,
+							completed_today: true,
+					  }
+					: item,
+			),
+		)
+
 		try {
-			const data = await createHabit(form)
-			setForm({ name: '', frequency: 'daily', reminderTime: '' })
+			const data = await completeHabit(habitId)
+			const serverStreak = Number(data?.streak || nextStreak)
+			const serverBest = Number(data?.bestStreak || nextBest)
+			const safeStreak = Math.max(serverStreak, nextStreak, 1)
+			const safeBest = Math.max(serverBest, nextBest, 1)
+			setNotice(`Completed. Current streak: ${safeStreak}`)
+			setHabits((prev) =>
+				prev.map((item) =>
+					item.id === habitId
+						? {
+								...item,
+								streak: safeStreak,
+								best_streak: safeBest,
+								completed_today: true,
+						  }
+						: item,
+				),
+			)
 			await loadHabits()
-			setNotice(data.notification?.message || 'Habit created')
+			setHabits((prev) =>
+				prev.map((item) =>
+					item.id === habitId
+						? {
+								...item,
+								streak: safeStreak,
+								best_streak: safeBest,
+								completed_today: true,
+						  }
+						: item,
+				),
+			)
+			if (selectedHabitId === habitId) {
+				const calendar = await getHabitCalendar(habitId, year, month)
+				setCalendarDates(calendar.dates || [])
+			}
 		} catch (e) {
+			if (e?.message?.includes('already recorded') || e?.message?.includes('current period')) {
+				setHabits((prev) =>
+					prev.map((item) =>
+						item.id === habitId ? { ...item, completed_today: true } : item,
+					),
+				)
+				return
+			}
+			setError(e.message)
+		} finally {
+			inFlightCompletionRef.current.delete(habitId)
+			setPendingCompletionIds((prev) => prev.filter((id) => id !== habitId)
 			setError(e.message)
 		}
 	}
 
 	const onComplete = async (habitId) => {
 		setError('')
+		const habit = habits.find((item) => item.id === habitId)
+		if (!habit || habit.completed_today || inFlightCompletionRef.current.has(habitId)) {
+			return
+		}
+
+		const todayKey = getTodayKey()
+		const previousStreak = Number(habit?.streak || 0)
+		const nextStreak = Math.max(previousStreak + 1, 1)
+		const nextBest = Math.max(Number(habit?.best_streak || habit?.streak || 0), nextStreak)
+
+		inFlightCompletionRef.current.add(habitId)
+		setPendingCompletionIds((prev) => [...new Set([...prev, habitId])])
+		setCompletedTodayByHabit((prev) => ({
+			...prev,
+			[habitId]: { dayKey: todayKey },
+		}))
+		setHabits((prev) =>
+			prev.map((item) =>
+				item.id === habitId
+					? {
+							...item,
+							streak: nextStreak,
+							best_streak: nextBest,
+							completed_today: true,
+					  }
+					: item,
+			),
+		)
+
 		try {
 			const data = await completeHabit(habitId)
-			setNotice(`Completed. Current streak: ${data.streak}`)
+			const serverStreak = Number(data?.streak || nextStreak)
+			const serverBest = Number(data?.bestStreak || nextBest)
+			const safeStreak = Math.max(serverStreak, nextStreak, 1)
+			const safeBest = Math.max(serverBest, nextBest, 1)
+			setNotice(`Completed. Current streak: ${safeStreak}`)
+			setHabits((prev) =>
+				prev.map((item) =>
+					item.id === habitId
+						? {
+								...item,
+								streak: safeStreak,
+								best_streak: safeBest,
+								completed_today: true,
+						  }
+						: item,
+				),
+			)
 			await loadHabits()
+			setHabits((prev) =>
+				prev.map((item) =>
+					item.id === habitId
+						? {
+								...item,
+								streak: safeStreak,
+								best_streak: safeBest,
+								completed_today: true,
+						  }
+						: item,
+				),
+			)
 			if (selectedHabitId === habitId) {
 				const calendar = await getHabitCalendar(habitId, year, month)
 				setCalendarDates(calendar.dates || [])
 			}
 		} catch (e) {
+			if (e?.message?.includes('already recorded') || e?.message?.includes('current period')) {
+				setHabits((prev) =>
+					prev.map((item) =>
+						item.id === habitId ? { ...item, completed_today: true } : item,
+					),
+				)
+				return
+			}
 			setError(e.message)
+		} finally {
+			inFlightCompletionRef.current.delete(habitId)
+			setPendingCompletionIds((prev) => prev.filter((id) => id !== habitId))
 		}
 	}
 
